@@ -126,9 +126,9 @@ else:
     st.balloons()
     st.success("🎉 Session Complete!")
     st.metric("Final Score", st.session_state.score)
-    if st.button("Finish"):
+    
+if st.button("Finish"):
         st.session_state.game_active = False
         st.rerun()
-
 else:
     st.info("Select a difficulty and click 'Start Game' in the sidebar to begin.")
