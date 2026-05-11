@@ -31,7 +31,7 @@ with st.sidebar:
     if st.button("🚀 Start New Session"):
         if api_key:
             with st.spinner("AI is crafting your lesson..."):
-                st.session_state.word_data = get_advanced_content(api_key, diff)
+                st.session_state.word_data = []
                 st.session_state.score = 0
                 st.session_state.total_attempts = 0
                 st.session_state.wrong_words = []
