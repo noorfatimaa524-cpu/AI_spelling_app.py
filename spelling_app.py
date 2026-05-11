@@ -5,127 +5,95 @@ import io
 from gtts import gTTS
 from groq import Groq
 
-# GROQ
-api_key=("Enter your GROQ API key here")
-client = Groq(api_key=api_key)
-st.set_page_config(page_title="Pro AI Spelling Tutor", page_icon="🎓", layout="wide")
+# --- INITIAL SETUP ---
+st.set_page_config(page_title="AI Spelling Tutor Pro", page_icon="🎓")
 
-# --- SESSION STATE INITIALIZATION ---
-if "word_data" not in st.session_state:
-    st.session_state.word_data = []  # List of dicts: {"word": "", "definition": "", "example": ""}
+if "word_list" not in st.session_state:
+    st.session_state.word_list = []  # List of dicts: {"word": "", "definition": ""}
 if "score" not in st.session_state:
     st.session_state.score = 0
-if "total_attempts" not in st.session_state:
-    st.session_state.total_attempts = 0
-if "wrong_words" not in st.session_state:
-    st.session_state.wrong_words = []
-if "game_active" not in st.session_state:
-    st.session_state.game_active = True
+if "current_index" not in st.session_state:
+    st.session_state.current_index = 0
 
-# --- SIDEBAR: SETTINGS ---
+# --- SIDEBAR ---
 with st.sidebar:
-    st.title("⚙️ Controls")
-    api_key = st.text_input("Groq API Key", type="password")
-    diff = st.select_slider("Difficulty", options=["easy", "normal", "hard"])
-    if st.button("🚀 Start New Session"):
-        if api_key:
-            with st.spinner("AI is crafting your lesson..."):
-                st.session_state.word_data = []
-                st.session_state.score = 0
-                st.session_state.total_attempts = 0
-                st.session_state.wrong_words = []
-                st.session_state.game_active = True
-                st.rerun()
-        else:
-            st.error("Enter API Key first!")
-
-# AI WORDS
-def get_advanced_content(api_key, difficulty):
-    client = Groq(api_key=api_key)
-    prompt = f"""
-    Generate 8 spelling words for {difficulty} level.
-    For each word, provide a brief definition and one example sentence.
-    Return ONLY a JSON array like this:
-    [
-      {{"word": "necessary", "definition": "needed to be done", "example": "Sleep is necessary for health."}}
-    ]
-    """
-    try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=[{"role": "user", "content": prompt}],
-            response_format={"type": "json_object"} # Ensures valid JSON
-        )
-        raw_data = json.loads(response.choices[0].message.content)
-        # Handle cases where AI wraps list in a key
-        return raw_data if isinstance(raw_data, list) else list(raw_data.values())[0]
-    except Exception as e:
-        st.error(f"AI Error: {e}")
-        return [{"word": "example", "definition": "a representative form", "example": "This is an example."}]
-
-def play_audio(text):
-    tts = gTTS(text=text, lang='en')
-    fp = io.BytesIO()
-    tts.write_to_fp(fp)
-    return f
-
-# --- MAIN GAME LOGIC ---
-if st.session_state.game_active and st.session_state.word_data:
-    current_item = st.session_state.word_data[0] # Always grab the first word in queue
-    col1, col2 = st.columns([2, 1])
-    with col1:
-        st.write(f"### Word {st.session_state.score + 1}")
-        progress = st.progress(0) # Logic for progress bar below
-        
-        # Audio Section
-        st.write("🔈 **Listen to the word:**")
-        audio_fp = play_audio(f"The word is {current_item['word']}. {current_item['example']}")
-        st.audio(audio_fp, format="audio/mp3")
-        
-        # Clues (Expandable)
-        with st.expander("💡 Need a hint? (Definition & Example)"):
-            st.write(f"**Definition:** {current_item['definition']}")
-            st.write(f"**Example:** *{current_item['example']}*")
-
-        # Input
-        with st.form(key="input_form", clear_on_submit=True):
-            user_input = st.text_input("Type your spelling:").strip().lower()
-            if st.form_submit_button("Submit Answer"):
-                st.session_state.total_attempts += 1
-                
-                if user_input == current_item['word'].lower():
-                    st.toast("Correct! ✨", icon="✅")
-                    st.session_state.score += 1
-                    st.session_state.word_data.pop(0) # Remove if correct
-                else:
-                    st.error(f"Not quite! The correct spelling was: **{current_item['word']}**")
-                    st.session_state.wrong_words.append(current_item['word'])
-                    # Spaced Repetition: Move the missed word to the back of the list
-                    failed_word = st.session_state.word_data.pop(0)
-                    st.session_state.word_data.append(failed_word) 
-                
-                st.rerun()
-
-    with col2:
-        st.metric("Score", f"{st.session_state.score}")
-        st.metric("Accuracy", f"{int((st.session_state.score/st.session_state.total_attempts)*100 if st.session_state.total_attempts > 0 else 0)}%")
-        
-        if st.session_state.wrong_words:
-            st.write("📝 **Review List:**")
-            for w in set(st.session_state.wrong_words):
-                st.caption(f"- {w}")
-
-elif not st.session_state.game_active:
-    st.header("Welcome to the Advanced Spelling Tutor")
-    st.write("This app uses AI to generate custom spelling lists with definitions and context.")
-    st.info("👈 Set your API key and difficulty in the sidebar to start!")
-else:
-    st.balloons()
-    st.success("🎉 Session Complete!")
-    st.metric("Final Score", st.session_state.score)
+    st.header("Learning Settings")
+    api_key = st.text_input("Enter Groq API Key", type="password")
+    difficulty = st.selectbox("Level", ["easy", "normal", "hard"])
     
-if st.button("Finish"):
-        st.session_state.game_active = False
+    if st.button("Generate New Lesson"):
+        if not api_key:
+            st.error("Please enter your API Key!")
+        else:
+            try:
+                client = Groq(api_key=api_key)
+                # Specific prompt to get definitions and examples
+                prompt = f"""
+                Generate random spelling words for {difficulty} level. 
+                Return ONLY a JSON array of objects with keys: 'word', 'definition'.
+                Example: [{{"word": "apple", "definition": "a round fruit"}}]
+                """
+                chat_completion = client.chat.completions.create(
+                    messages=[{"role": "user", "content": prompt}],
+                    model="llama-3.3-70b-versatile",
+                    response_format={"type": "json_object"} # Forces JSON output
+                )
+                
+                raw_json = chat_completion.choices[0].message.content
+                data = json.loads(raw_json)
+                
+                # Extract the list regardless of the key the AI uses
+                if isinstance(data, dict):
+                    st.session_state.word_list = list(data.values())[0]
+                else:
+                    st.session_state.word_list = data
+                
+                st.session_state.current_index = 0
+                st.session_state.score = 0
+                st.success("Lesson Ready!")
+            except Exception as e:
+                st.error(f"AI Error: {e}")
+
+# --- MAIN GAME AREA ---
+st.title("🎓 AI Spelling & Vocabulary")
+
+if st.session_state.word_list and st.session_state.current_index < len(st.session_state.word_list):
+    current_data = st.session_state.word_list[st.session_state.current_index]
+    word = current_data['word']
+    
+    st.write(f"### Word {st.session_state.current_index + 1} of {len(st.session_state.word_list)}")
+    
+    # 1. Audio (TTS)
+    tts = gTTS(text=f"The word is {word}. {current_data.get('example', '')}", lang='en')
+    audio_fp = io.BytesIO()
+    tts.write_to_fp(audio_fp)
+    st.audio(audio_fp, format="audio/mp3")
+
+    # 2. Hints (Definitions)
+    with st.expander("👁️ Show Definition"):
+        st.write(f"**Definition:** {current_data.get('definition', 'No definition provided.')}")
+
+    # 3. Input Form
+    with st.form(key="spell_form", clear_on_submit=True):
+        guess = st.text_input("Type the word:").strip().lower()
+        submitted = st.form_submit_button("Submit")
+        
+        if submitted:
+            if guess == word.lower():
+                st.success(f"Perfect! '{word}' is correct.")
+                st.session_state.score += 1
+            else:
+                st.error(f"Incorrect. The word was: **{word}**")
+            
+            st.session_state.current_index += 1
+            st.rerun()
+
+elif st.session_state.current_index >= len(st.session_state.word_list) and st.session_state.word_list:
+    st.balloons()
+    st.header("Lesson Finished! 🎉")
+    st.subheader(f"Your Accuracy: {(st.session_state.score / len(st.session_state.word_list)) * 100}%")
+    if st.button("Restart"):
+        st.session_state.word_list = []
         st.rerun()
 else:
-    st.info("Select a difficulty and click 'Start Game' in the sidebar to begin.")
+    st.info("👈 Enter your API key and click 'Generate New Lesson' to start.")
