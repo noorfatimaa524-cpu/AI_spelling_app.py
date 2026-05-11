@@ -1,0 +1,206 @@
+import random
+import json
+import pyttsx3
+from groq import Groq
+
+# GROQ
+api_key=("Enter your GROQ API key here")
+client = Groq(api_key=api_key)
+
+# SPEECH 
+engine = pyttsx3.init()
+engine.setProperty("rate",150)
+
+def speak(text, show=True):
+    if show:
+        print(text)
+
+    engine.say(text)   
+
+def flush_speech():
+    engine.runAndWait()   
+
+def should_exit(text):
+    return text.lower() in ["exit","quit","q"]
+
+# AI WORDS
+def get_words_from_ai(difficulty):
+
+    prompt=f"""
+Generate 10 spelling words for {difficulty} difficulty.
+
+Return only JSON:
+[
+{{"word":"banana"}},
+{{"word":"elephant"}}
+]
+"""
+
+    try:
+        speak("Loading words from A I")
+        flush_speech()
+
+        response=client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role":"system",
+                    # model training
+                    "content": """
+                    You are an adaptive spelling tutor using spaced repetition.
+
+Generate spelling words using a memory pool system.
+
+Rules:
+
+1. Keep 3 word pools:
+- New words (new unseen words)
+- Review words (correctly answered in past sessions that should reappear sometimes)
+- Weak words (misspelled words that should repeat more often)
+
+2. For every session generate a mix:
+- 50 percent new words
+- 30 percent review words from older sessions
+- 20 percent weak words (prioritize these)
+
+3. If a word was answered wrong:
+- Repeat it again in the same session after a few words
+- Add it to weak words pool
+- Show it more often in future sessions
+
+4. Use spaced repetition:
+- Easy/correct words appear again after longer gaps
+- Difficult words appear sooner and more frequently
+
+5. Occasionally recycle words from previous sessions for revision, like Duolingo.
+
+6. Avoid showing the same word too many times in a row.
+
+7. Adjust difficulty based on user level:
+easy, normal, hard.
+
+8. Return ONLY valid JSON in this format:
+
+[
+ {"word":"banana","type":"new"},
+ {"word":"elephant","type":"review"},
+ {"word":"necessary","type":"weak"}
+]
+
+9. Treat user history (previous correct words and wrong words) as memory and use it when generating words.
+
+Prioritize learning and retention over randomness.
+"""
+                },
+                {
+                    "role":"user",
+                    "content":prompt
+                }
+            ]
+        )
+
+        data=json.loads(
+            response.choices[0].message.content
+        )
+
+        return [
+            item["word"].lower()
+            for item in data
+        ]
+
+    except:
+        speak("A I failed using backup words")
+        flush_speech()
+
+        return {
+            "easy":[
+                "cat","sun","book"
+            ],
+            "normal":[
+                "banana","elephant","bicycle"
+            ],
+            "hard":[
+                "necessary",
+                "rhythm",
+                "accommodation"
+            ]
+        }[difficulty]
+
+# START
+score=0
+wrong_words=[]
+
+# Queue all intro speech first
+speak("Welcome to spelling game")
+speak("Choose difficulty")
+print("Press one for easy")
+print("Press two for normal")
+print("Press three for hard")
+
+# speak everything together
+flush_speech()
+
+choice=input("Enter choice: ").strip()
+
+difficulty="easy"
+
+if choice=="2":
+    difficulty="normal"
+
+elif choice=="3":
+    difficulty="hard"
+
+words=get_words_from_ai(difficulty)
+
+speak("Words loaded")
+speak("Game starting")
+flush_speech()
+
+# GAME LOOP
+while words:
+
+    word=random.choice(words)
+
+    speak("Spell this word")
+    speak(word,show=False)
+    flush_speech()
+
+    answer=input(
+      "Your spelling: "
+    ).lower().strip()
+
+
+    if should_exit(answer):
+        speak(
+          f"Game exited. Score {score}"
+        )
+        flush_speech()
+        break
+
+    if answer==word:
+
+        speak("Correct")
+        score+=1
+        words.remove(word)
+
+        speak(
+          f"Score is {score}"
+        )
+        flush_speech()
+
+    else:
+
+        speak("Wrong")
+        speak(
+          "This word will come again"
+        )
+        flush_speech()
+
+        if word not in wrong_words:
+            wrong_words.append(word)
+
+speak("Game over")
+flush_speech()
+
+print("Final Score:",score)
+print("Need Review:",wrong_words)
