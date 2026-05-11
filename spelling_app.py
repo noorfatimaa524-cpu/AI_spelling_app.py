@@ -20,14 +20,13 @@ if "total_attempts" not in st.session_state:
 if "wrong_words" not in st.session_state:
     st.session_state.wrong_words = []
 if "game_active" not in st.session_state:
-    st.session_state.game_active = False
+    st.session_state.game_active = True
 
 # --- SIDEBAR: SETTINGS ---
 with st.sidebar:
     st.title("⚙️ Controls")
     api_key = st.text_input("Groq API Key", type="password")
     diff = st.select_slider("Difficulty", options=["easy", "normal", "hard"])
-    
     if st.button("🚀 Start New Session"):
         if api_key:
             with st.spinner("AI is crafting your lesson..."):
@@ -73,9 +72,7 @@ def play_audio(text):
 # --- MAIN GAME LOGIC ---
 if st.session_state.game_active and st.session_state.word_data:
     current_item = st.session_state.word_data[0] # Always grab the first word in queue
-    
     col1, col2 = st.columns([2, 1])
-    
     with col1:
         st.write(f"### Word {st.session_state.score + 1}")
         progress = st.progress(0) # Logic for progress bar below
